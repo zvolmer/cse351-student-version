@@ -53,12 +53,12 @@ class ATM_Reader(threading.Thread):
 
     def __init__(self, filename, bank):
         super().__init__()
-        self.filename = filename
-        self.bank = bank
+        self._filename = filename
+        self._bank = bank
 
     def run(self):
         try:
-            with open(self.filename, 'r') as f:
+            with open(self._filename, 'r') as f:
                 for line in f:
                     line = line.strip()
                     if not line or line.startswith('#'):
@@ -102,21 +102,8 @@ class Account:
             self._balance.sub(m)
 
     def get_balance(self):
-        with self._lock:
-            digits = self._balance.digits  
-            sign = ''
-            num = digits
-            if num and num[0] in ('+', '-'):
-                sign = num[0]
-                num = num[1:]
-
-            if len(num) <= 2:
-                num = num.zfill(3)
-
-            dollars = num[:-2] if len(num) > 2 else '0'
-            cents = num[-2:]
-            money_str = f'{sign}{dollars}.{cents}'
-            return Money(money_str)
+        with self._update_lock:
+            return self._balance
 
 # ===========================================================================
 class Bank:
