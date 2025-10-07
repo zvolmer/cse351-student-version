@@ -1,7 +1,7 @@
 """
 Course    : CSE 351
 Assignment: 02
-Student   : <your name here>
+Student   : <Zac Volmer>
 
 Instructions:
     - review instructions in the course
@@ -15,7 +15,7 @@ from money import *
 from cse351 import *
 
 # ---------------------------------------------------------------------------
-def main(): 
+def main():
 
     print('\nATM Processing Program:')
     print('=======================\n')
@@ -24,36 +24,132 @@ def main():
 
     # Load ATM data files
     data_files = get_filenames('data_files')
-    # print(data_files)
-    
+    print('Found data files:', data_files)
+    print('Number of files:', len(data_files))
+
     log = Log(show_terminal=True)
     log.start_timer()
 
     bank = Bank()
 
-    # TODO - Add a ATM_Reader for each data file
+    readers = []
+    for filename in data_files:
+        print(f'starting thread for {filename}')
+        reader = ATM_Reader(filename, bank)
+        reader.start()
+        readers.append(reader)
+
+    for r in readers:
+        r.join()
 
     test_balances(bank)
 
     log.stop_timer('Total time')
 
 
-# ===========================================================================
-class ATM_Reader():
-    # TODO - implement this class here
-    ...
-
 
 # ===========================================================================
-class Account():
-    # TODO - implement this class here
-    ...
+class ATM_Reader(threading.Thread):
+
+    def __init__(self, filename, bank):
+        super().__init__()
+        self.filename = filename
+        self.bank = bank
+
+    def run(self):
+        try:
+            with open(self.filename, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    parts = line.split(',')
+                    if len(parts) < 3:
+                        continue
+                    try:
+                        account_number = int(parts[0])
+                        trans_type = parts[1].strip().lower()
+                        amount_str = parts[2].strip()
+                    except Exception:
+                        continue
+
+                    if trans_type == 'd':
+                        self.bank.deposit(account_number, amount_str)
+                    elif trans_type == 'w':
+                        self.bank.withdraw(account_number, amount_str)
+                    else:
+                        continue
+        except FileNotFoundError:
+            return
 
 
 # ===========================================================================
-class Bank():
-    # TODO - implement this class here
-    ...
+class Account:
+
+    def __init__(self, account_number):
+        self.account_number = account_number
+        self._balance = Money('0.00')
+        self._lock = threading.Lock()
+
+    def deposit(self, amount_str):
+        m = Money(amount_str)
+        with self._lock:
+            self._balance.add(m)
+
+    def withdraw(self, amount_str):
+        m = Money(amount_str)
+        with self._lock:
+            self._balance.sub(m)
+
+    def get_balance(self):
+        with self._lock:
+            digits = self._balance.digits  
+            sign = ''
+            num = digits
+            if num and num[0] in ('+', '-'):
+                sign = num[0]
+                num = num[1:]
+
+            if len(num) <= 2:
+                num = num.zfill(3)
+
+            dollars = num[:-2] if len(num) > 2 else '0'
+            cents = num[-2:]
+            money_str = f'{sign}{dollars}.{cents}'
+            return Money(money_str)
+
+# ===========================================================================
+class Bank:
+
+    def __init__(self):
+        self._accounts = {}
+        self._accounts_lock = threading.Lock()
+
+    def _get_or_create_account(self, account_number):
+        acct = self._accounts.get(account_number)
+        if acct is not None:
+            return acct
+
+        with self._accounts_lock:
+            acct = self._accounts.get(account_number)
+            if acct is None:
+                acct = Account(account_number)
+                self._accounts[account_number] = acct
+            return acct
+
+    def deposit(self, account_number, amount_str):
+        acct = self._get_or_create_account(account_number)
+        acct.deposit(amount_str)
+
+    def withdraw(self, account_number, amount_str):
+        acct = self._get_or_create_account(account_number)
+        acct.withdraw(amount_str)
+
+    def get_balance(self, account_number):
+        acct = self._accounts.get(account_number)
+        if acct is None:
+            return Money('0.00')
+        return acct.get_balance()
 
 
 # ---------------------------------------------------------------------------
