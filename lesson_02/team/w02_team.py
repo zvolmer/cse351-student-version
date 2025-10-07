@@ -62,15 +62,8 @@ def get_urls(film6, kind):
     for url in film6[kind]:
         t = GetUrl(url)
         call_count += 1
-        t.start()
-        threads.append(t)
-    
-    for t in threads:
-        t.join()
-
-    print(kind)
-    for t in threads:
-        print(f'  - {t.get_name()}')
+        item = get_data_from_server(url)
+        print(f'  - {item['name']}')
 
 def main():
     global call_count
